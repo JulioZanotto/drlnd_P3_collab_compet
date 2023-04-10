@@ -15,7 +15,7 @@ GAMMA = 0.99            # discount factor
 TAU = 1e-3              # for soft update of target parameters
 LR_ACTOR = 1e-3         # learning rate of the actor 
 LR_CRITIC = 1e-3        # learning rate of the critic
-WEIGHT_DECAY = 0        # L2 weight decay
+WEIGHT_DECAY = 0.        # L2 weight decay
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -37,12 +37,12 @@ class Agents():
         self.num_agents = num_agents
         self.seed = random.seed(random_seed)
 
-        # Actor Network (w/ Target Network)
+        # Actor Network
         self.actor_local = Actor(state_size, action_size, random_seed).to(device)
         self.actor_target = Actor(state_size, action_size, random_seed).to(device)
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
 
-        # Critic Network (w/ Target Network)
+        # Critic Network
         self.critic_local = Critic(state_size, action_size, random_seed).to(device)
         self.critic_target = Critic(state_size, action_size, random_seed).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
@@ -56,12 +56,12 @@ class Agents():
 
     def step(self, states, actions, rewards, next_states, dones):
         """Save experience in replay memory, and use random sample from buffer to learn."""
-        # Save experience / reward
-        
+
+        # Save experience / reward for each agent
         for i in range(self.num_agents):
             self.memory.add(states[i,:], actions[i,:], rewards[i], next_states[i,:], dones[i])
 
-        # Learn, if enough samples are available in memory
+        # Learn
         if len(self.memory) > BATCH_SIZE:
             experiences = self.memory.sample()
             self.learn(experiences, GAMMA)
@@ -73,9 +73,13 @@ class Agents():
         
         self.actor_local.eval()
         with torch.no_grad():
-            for num, state in enumerate(states):
-                actions[num,:] = self.actor_local(state).cpu().data.numpy()
+            for idx, state in enumerate(states):
+                actions[idx,:] = self.actor_local(state).cpu().data.numpy()
+        
+        # back to train mode
         self.actor_local.train()
+
+        # Add noise for exploration
         if add_noise:
             actions += self.noise.sample()
         return np.clip(actions, -1, 1)
@@ -139,7 +143,7 @@ class Agents():
 class OUNoise:
     """Ornstein-Uhlenbeck process."""
 
-    def __init__(self, size, seed, mu=0., theta=0.15, sigma=0.1): # default: mu=0., theta=0.15, sigma=0.2
+    def __init__(self, size, seed, mu=0., theta=0.15, sigma=0.1):
         """Initialize parameters and noise process."""
         self.size = size
         self.mu = mu * np.ones(size)

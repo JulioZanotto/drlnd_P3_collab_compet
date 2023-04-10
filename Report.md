@@ -1,74 +1,91 @@
-## Udacity Deep Reinforcement Learning Nanodegree 
-## Project 3: Collaboration & Competition
+[//]: # (Image References)
 
-### Description of Implementation
+[image1]: imgs/plots.png "Plotted Scores"
 
-The environment is solved using a multi-agent deep deterministic policy gradient (DDPG) algorithm. Training proceeds as follows:
+# Udacity Project Three: Collab-Compete (A Multi Agent Environment)
+This project focus on training multi agent to be able to train to play together Tennis in an Unity environment.
 
-1. The 2 agents each receive a different state vector (with 24 elements) from the environment
-1. Each agent feeds its state vector through the local actor network to get an action vector (with 2 elements) as output. Noise based on an Ornstein-Uhlenbeck process is added to the predicted actions to encourage exploration
-1. Each agent then receives a next state vector and a reward from the environment (as well as a termination signal that indicates if the episode is complete)
-1. The experience tuple `(state, action, reward, next state)` of each agent is added to a common replay buffer
-1. A random sample of experience tuples is drawn from the replay buffer (once it contains enough) 
-1. The sample is used to update the weights of the local critic network:
-    1. The next state is fed into the target actor to obtain the next action
-    1. The (next state, next action) pair is fed into the target critic to obtain an action value, Q_next
-    1. The action value for the current state is then computed as Q_cur = reward + gamma*Q_next
-    1. The (current state, current action) pair are fed into the local critic to obtain a predicted action value, Q_pred
-    1. The MSE loss is computed between Q_cur and Q_pred, and the weights of the local critic are updated accordingly
-1. The sample is used to update the weights of the local actor network:
-    1. The current state is fed into the local actor to obtain predicted a action
-    1. Each (current state, predicted action) pair for the sample is fed into the local critic to obtain action values
-    1. The negative mean of the predicted Q values is used as a loss function to update the weights of the local actor
-1. The target actor and critic networks are then soft-updated by adjusting their weights slightly toward those of their local counterparts
-1. The states that were obtained in step (3) then become the current states for each agent and the process repeats from step (2)
+## The Environment Description
+In this environment, two agents control rackets to bounce a ball over a net. If an agent hits the ball over the net, it receives a reward of +0.1.  If an agent lets a ball hit the ground or hits the ball out of bounds, it receives a reward of -0.01.  Thus, the goal of each agent is to keep the ball in play.
 
-#### Learning Algorithms
+The observation space consists of 8 variables corresponding to the position and velocity of the ball and racket. Each agent receives its own, local observation.  Two continuous actions are available, corresponding to movement toward (or away from) the net, and jumping. 
 
-This project considers a multi-agent implementation of the DDPG algorithm.
+The task is episodic, and in order to solve the environment, your agents must get an average score of +0.5 (over 100 consecutive episodes, after taking the maximum over both agents). Specifically,
 
-#### Agent Hyperparameters
+- After each episode, we add up the rewards that each agent received (without discounting), to get a score for each agent. This yields 2 (potentially different) scores. We then take the maximum of these 2 scores.
+- This yields a single **score** for each episode.
 
-- `GAMMA = 0.99` is the discount factor that controls how far-sighted each agent is with respect to rewards. `GAMMA = 0` implies that only the immediate reward is important and `GAMMA = 1.0` implies that all rewards are equally important, irrespective whether they are realised soon and much later
-- `TAU = 0.001` controls the degree to which the target network parameters are adjusted toward those of the local network. `TAU = 0` implies no adjustment (the target network does not ever learn) and `TAU = 1` implies that the target network parameters are completely replaced with the local network parameters
-- `LR_ACTOR = 0.001` is the learning rate for the gradient descent update of the local actor weights
-- `LR_CRITIC = 0.001` is the learning rate for the gradient descent update of the local critic weights
-- `BUFFER_SIZE = 100000` is the number of experience tuples `(state, action, reward, next_state, done)` that are stored in the replay buffer and avaiable for learning
-- `BATCH_SIZE = 128` is the number of tuples that are sampled from the replay buffer for learning
-- During training, the predicted actions were corrupted with noise based on an Ornstein-Uhlenbeck process with mean `mu = 0`, mean reversion rate `theta = 0.15` and variance `sigma = 0.1` 
+The environment is considered solved, when the average (over 100 episodes) of those **scores** is at least +0.5.
+
+## Learning Algorithm
+To solve this environment, I have used the MADDPG (Multi Agent Deep Deterministic Policy Gradient) to train the agents. This variation of the DDPG Actor-Critic architecture, uses 2 decentralized Actors and 1 Centralized Critic, that means that the actor will only have acess to the scene and the critic will use the Q values of both actors to evaluate and update. So this uses the same off-policy with experience replay from the regular DDPG, as it was almost exactly the same from the previous project Continuous Control, but now the act step requires to send information for both agent from the scene and stores both returned actions, and so storing it the same way. The local and target architecture is maintained for training stability, and the network update process happens the same while sampling from the replay buffer for each agent and the critic network uses the actiors actions to evaluate. The rewards are store using the maximum between agents and therefore averaged to keep track of the algorithim evolution.
 
 
-#### Network Architectures and Hyperparameters
+### The Actor-Critic Network Architecture 
 
-The actor network takes a state vector (24 elements) as input and returns an action vector (2 elements). It was modelled with a feedforward deep neural network comprising a 24 dimensional input layer, two hidden layers with 128 neurons and ReLU activations and a 2 dimensional output layer with a tanh activation to ensure that the predicted actions are in the range -1 to +1. Batch normalisation was applied to the input and two hidden layers. 
+    Actor(
+        Input size of 24 (states)
+        Fully Connected layer: input_size = 24, output_size = 128 (Activation ReLU)
+        Batch Norm 1D: 128
+        Fully Connected layer: input_size = 128, output_size = 128 (Activation ReLU)
+        Batch Norm 1D: 128
+        Fully Connected layer: input_size = 128, output_size = 2 (Output continuous values for moviment and hit)
+    )
 
-The critic network takes the state and action vectors as input, and returns a scalar Q value as output. It was modelled with a feedforward deep neural network with a 24 dimensional input layer (for the state vector) that was fully connected to 128 neurons in the first hidden layer with ReLU activations. The outputs of the first layer were batch normalised and concatenated with the 2 dimensional action vector as input to the second hidden layer, which also comprised 128 neurons with ReLU activations. Finally, the second hidden layer mapped to an output layer with single neuron and linear activation (outputs a single real number). 
+    Critic(
+        Input size of 24 (states)
+        Fully Connected layer: input_size = 24, output_size = 128 (Activation ReLU)
+        Batch Norm 1D: 128
+        Fully Connected layer: input_size = 128 + 2, output_size = 128 (Activation ReLU)
+        Fully Connected layer: input_size = 128, output_size = 1 (Output the Q value)
+    )
+
+### hyper-parameter
+
+    BUFFER_SIZE = int(1e5)  # replay buffer size
+    BATCH_SIZE = 128        # minibatch size
+    GAMMA = 0.99            # discount factor
+    TAU = 1e-3              # for soft update of target parameters
+    LR_ACTOR = 1e-3         # learning rate of the actor 
+    LR_CRITIC = 1e-3        # learning rate of the critic
+    WEIGHT_DECAY = 0.       # L2 weight decay
+
+    The value of *GAMMA*, is responsible for the discounting the rewards for the episodes, so the nearest ones have more say in the final reward.
+    
+
+## Train The Network
+    Episode 100	Average Score: 0.01	 Max score: 0.10
+    Episode 200	Average Score: 0.02	 Max score: 0.10
+    Episode 300	Average Score: 0.02	 Max score: 0.10
+    Episode 400	Average Score: 0.02	 Max score: 0.20
+    Episode 500	Average Score: 0.05	 Max score: 0.30
+    Episode 600	Average Score: 0.04	 Max score: 0.10
+    Episode 700	Average Score: 0.07	 Max score: 0.30
+    Episode 800	Average Score: 0.11	 Max score: 0.40
+    Episode 900	Average Score: 0.14	 Max score: 0.60
+    Episode 1000	Average Score: 0.26	 Max score: 2.60
+    Episode 1100	Average Score: 0.19	 Max score: 2.00
+    Episode 1200	Average Score: 0.12	 Max score: 0.20
+    **Environment solved in 1263 episodes, mean score: 0.50**
+    Episode 1289	Average Score: 0.71
+
+    Average score is the mean on the 100 last episodes, and I also plotted the max, just to understand the mean overall.
+    Here we can see that in 1263 episodes the mean over the last 100 was 0.5, we can see throught the max that there we a lots of ups and downs, but leads in the end to the 0.5 mean.
+    I chose to let the agent train a little more, and when it reached 0.7, to break the training loop, more than this the overall would be really instable, reaching up to 2.0 points to 0.2 in the mean score.
+
+## Plotted Results
+
+![Plotted Scores][image1]
+
+## More Information
+On [Tennis.ipynb](https://github.com/JulioZanotto/drlnd_P3_collab_compet/blob/main/Tennis.ipynb)
 
 
-### Results
+## Ideas for Future Work
+The Agent had a very nice performance, and was able to solve the environment, but was a little instable after 1200 episodes, with some ups and downs.
+Even thought, a few tweaks can be done, as change a little hyper parameters like the learning rate, this number was critical on the convergence, helping a lot on how fast the agent copuld learn. Also the OU noise parameters like the sigma and theta was critical for the convergence and any change would affect the exploration and thus the policy. I believe the most significant test would be also another method like D4PG or SAC (Soft Actor Critic).
 
-The 2 agents were trained for 2000 episodes. An average score greater than 0.5 over the last 100 episodes was first obtained at episode 1025 (average = 0.52). The best average score of 1.61 was obtained after 1567 episodes (averaged over episodes 1468 to 1567). The actor and critic weights corresponding to these agents is stored in the code folder. Although the average exceeds the target +0.5, it is clear from the plot below that there is a lot of variation in the score from episode to episode. The dashed vertical line indicates the point at which the enviroment was considered solved. The dashed horizontal lines indicate the target threshold (in green) and the maximum score obtained over the 2000 episodes (navy).
+It was shown in the last project and in a few others articles that PER (Prioritazed experience replay) had a significant improve in performance and algorithm estability.
 
-![results.png](results.png)
-
-Here are the trained agents playing a game of tennis:
-
-![trained_agents.gif](trained_agents.gif)
-
-
-### Future Plans for Improvement
-
-The performance of the agents might be improved by considering the following:
-
-- Consider procedures to reduce the episode-to-episode variation
-  
-  I tried decaying the Ornstein-Uhlenbeck noise exponentially over the episodes (with rate 0.998), but this did not seem to help with reducing the variation (the maximum score and time to solve the environment also remained roughly the same). I could try decaying the noise more rapidly to see if this reduces the variation (at the expense of exploration).
-
-- Hyperparameter optimisation 
-
-  Many of the hyperparameters, such as the network architectures (number of layers and neurons), learning rates, batch and buffer sizes, and the level of noise, could be further tuned to improve performance.
-
-- Alternative learning algorithms
-
-  Alternative methods include PPO with team spirit and the multi-agent DDPG algorithm described ![here](https://papers.nips.cc/paper/7217-multi-agent-actor-critic-for-mixed-cooperative-competitive-environments.pdf) that uses centralised training and decentralised execution. 
+I also want to try PPO to compare the results with DDPG, in a multi agent environment.
 
