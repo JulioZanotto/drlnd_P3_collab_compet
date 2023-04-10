@@ -40,3 +40,5 @@ The environment is considered solved, when the average (over 100 episodes) of th
 ### Instructions
 
 Follow the instructions in `Tennis.ipynb` to see how the agent was trained using Multi Agent Deep Determinist Policy Gradient ! Check also the `ma_ddpg.py` to check the Agents Class.
+
+To see a trained agent, I have saved the weigths with the *_best.pth* for actor and critic from the best model. Impor the libs and load the model from the 2 last cells.
